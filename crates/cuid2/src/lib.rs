@@ -171,25 +171,30 @@ fn hash<S: AsRef<[u8]>, T: IntoIterator<Item = S>>(input: T, length: u16) -> Str
 /// let too_small = "a";
 /// let too_big = "a1l23j1l2k3j12o8312j3k12j3lj12k3j1lk2j312j3lkj12l3g1kj2h312312lk3j1l2j3lk12j3lkjlj1lk23jl131l2k3jl12j3lk1j2lk3j12lk3h12k3hhl1j2j3";
 /// let non_ascii_alphanumeric = "a#";
+/// let non_first_letter = "1aaa";
+/// let with_underscore = "aaa_1aaa";
 /// assert!(cuid2::is_cuid2(id));
 /// assert!(!cuid2::is_cuid2(empty_id));
 /// assert!(!cuid2::is_cuid2(too_small));
 /// assert!(!cuid2::is_cuid2(too_big));
 /// assert!(!cuid2::is_cuid2(non_ascii_alphanumeric));
+/// assert!(!cuid2::is_cuid2(non_first_letter));
+/// assert!(!cuid2::is_cuid2(with_underscore));
 /// ```
 #[inline]
 pub fn is_cuid2<S: AsRef<str>>(to_check: S) -> bool {
-    let to_check = to_check.as_ref();
     const MAX_LENGTH: usize = BIG_LENGTH as usize;
-    match to_check.len() {
-        2..=MAX_LENGTH => {
-            STARTING_CHARS.contains(&to_check[..1])
-                && to_check[1..].chars().fold(true, |acc, ch| {
-                    acc && (ch.is_ascii_lowercase()) || ch.is_ascii_digit()
-                })
+
+    let to_check = to_check.as_ref().as_bytes();
+
+    if (2..=MAX_LENGTH).contains(&to_check.len()) {
+        if let [first, tail @ ..] = to_check {
+            return first.is_ascii_lowercase()
+                && tail.iter().all(|x| matches!(x, b'0'..=b'9' | b'a'..=b'z'));
         }
-        _ => false,
     }
+
+    false
 }
 
 /// Return whether a string is a legitimate CUID.
@@ -362,7 +367,7 @@ impl CuidConstructor {
             ],
             // The hash should be the desired total length minus 1 character
             // for the starting char.
-            self.length - 1,
+            self.length.saturating_sub(1),
         );
 
         // TODO check if index access makes a perf difference here
